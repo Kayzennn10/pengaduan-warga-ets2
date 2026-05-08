@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <title>Buat Pengaduan</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="brand"><i class="fas fa-shield-alt"></i> Portal Desa</div>
+        <div class="nav-links">
+            <a href="/">Beranda</a>
+        </div>
+    </nav>
+
+    <div class="container">
+        <h2><i class="fas fa-edit"></i> Formulir Laporan Warga</h2>
+        <form action="/pengaduan" method="POST" enctype="multipart/form-data">
+            
+            <div class="form-group">
+                <label><i class="fas fa-user"></i> Nama Lengkap Pelapor:</label>
+                <input type="text" name="nama" placeholder="Masukkan nama Anda..." required>
+            </div>
+            
+            <div class="form-group">
+                <label><i class="fas fa-comment-dots"></i> Deskripsi Keluhan (Detail):</label>
+                <textarea name="keluhan" rows="4" placeholder="Jelaskan secara rinci lokasi dan masalah yang terjadi..." required></textarea>
+            </div>
+            
+            <div class="form-group">
+                <label><i class="fas fa-camera"></i> Upload Foto Bukti Kejadian (WAJIB):</label>
+                <input type="file" name="foto" accept="image/*" required>
+            </div>
+            
+            <button type="submit" class="btn"><i class="fas fa-upload"></i> Kirim Laporan</button>
+            <a href="/" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Batal</a>
+        </form>
+    </div>
+</body>
+</html>

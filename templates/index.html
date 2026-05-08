@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <title>Portal Desa | Beranda</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="brand"><i class="fas fa-shield-alt"></i> Portal Desa</div>
+        <div class="nav-links">
+            <a href="/"><i class="fas fa-home"></i> Beranda</a>
+            <a href="/dashboard"><i class="fas fa-chart-line"></i> Dashboard Admin</a>
+        </div>
+    </nav>
+
+    <div class="container text-center">
+        <div class="hero">
+            <h1><i class="fas fa-bullhorn"></i> Layanan Pengaduan Warga</h1>
+            <p>Mari bersama membangun desa! Sampaikan keluhan, aspirasi, dan laporan infrastruktur di lingkungan Anda dengan cepat dan transparan.</p>
+            <a href="/pengaduan" class="btn"><i class="fas fa-paper-plane"></i> Buat Laporan Sekarang</a>
+            <a href="/dashboard" class="btn btn-secondary"><i class="fas fa-search"></i> Cek Status Laporan</a>
+        </div>
+    </div>
+</body>
+</html>
