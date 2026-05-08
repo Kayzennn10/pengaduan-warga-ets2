@@ -8,12 +8,11 @@ load_dotenv()
 
 app = Flask(__name__)
 
-# Konfigurasi Database (Sudah pakai mysql bawaan)
+# Konfigurasi Database (Dihapus bagian 'db' agar tidak nyasar ke sistem AWS)
 db_config = {
     'host': os.getenv('RDS_HOST'),
     'user': os.getenv('RDS_USER'),
     'password': os.getenv('RDS_PASSWORD'),
-    'db': 'mysql', 
     'charset': 'utf8mb4',
     'cursorclass': pymysql.cursors.DictCursor
 }
@@ -23,31 +22,39 @@ s3 = boto3.client(
     's3',
     aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
     aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY'),
-    region_name='ap-southeast-2'
+    region_name=os.getenv('AWS_REGION', 'ap-southeast-2')
 )
-BUCKET_NAME = 'pengaduan-desa-azka-2026'
+BUCKET_NAME = os.getenv('S3_BUCKET_NAME', 'pengaduan-desa-azka-2026')
+
+def get_connection():
+    # Bikin koneksi, buat database db_desa kalau belum ada, lalu gunakan db_desa
+    conn = pymysql.connect(**db_config)
+    with conn.cursor() as cursor:
+        cursor.execute("CREATE DATABASE IF NOT EXISTS db_desa;")
+        cursor.execute("USE db_desa;")
+    return conn
 
 def init_db():
-    conn = None # <--- SOLUSI: Deklarasi conn di awal agar tidak error
+    conn = None
     try:
-        conn = pymysql.connect(**db_config)
-        cursor = conn.cursor()
-        create_table_query = """
-        CREATE TABLE IF NOT EXISTS laporan (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            nama_pelapor VARCHAR(100),
-            keluhan TEXT,
-            foto_url VARCHAR(255),
-            status VARCHAR(20) DEFAULT 'Pending'
-        );
-        """
-        cursor.execute(create_table_query)
+        conn = get_connection()
+        with conn.cursor() as cursor:
+            create_table_query = """
+            CREATE TABLE IF NOT EXISTS laporan (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                nama_pelapor VARCHAR(100),
+                keluhan TEXT,
+                foto_url VARCHAR(255),
+                status VARCHAR(20) DEFAULT 'Pending'
+            );
+            """
+            cursor.execute(create_table_query)
         conn.commit()
         print("✅ Tabel laporan berhasil dipastikan ada!")
     except Exception as e:
         print(f"❌ Gagal buat tabel: {e}")
     finally:
-        if conn: # <--- SOLUSI: Cek dulu apakah conn ada sebelum ditutup
+        if conn:
             conn.close()
 
 @app.route('/')
@@ -67,7 +74,7 @@ def pengaduan():
 
         conn = None
         try:
-            conn = pymysql.connect(**db_config)
+            conn = get_connection()
             with conn.cursor() as cursor:
                 sql = "INSERT INTO laporan (nama_pelapor, keluhan, foto_url) VALUES (%s, %s, %s)"
                 cursor.execute(sql, (nama, keluhan, foto_url))
@@ -85,7 +92,7 @@ def dashboard():
     data_laporan = []
     conn = None
     try:
-        conn = pymysql.connect(**db_config)
+        conn = get_connection()
         with conn.cursor() as cursor:
             cursor.execute("SELECT * FROM laporan ORDER BY id DESC")
             data_laporan = cursor.fetchall()
