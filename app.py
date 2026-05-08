@@ -1,110 +1,102 @@
-from flask import Flask, render_template, request, redirect, url_for
-from dotenv import load_dotenv
-import boto3
-import pymysql
 import os
-import uuid
+from flask import Flask, render_template, request, redirect, url_for
+import pymysql
+import boto3
+from dotenv import load_dotenv
 
-# Load kunci rahasia dari file .env
 load_dotenv()
 
 app = Flask(__name__)
 
-# Konfigurasi Koneksi Boto3 ke S3
-s3_client = boto3.client(
-    's3',
-    aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
-    aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
-    region_name=os.environ.get('AWS_REGION')
-)
-BUCKET_NAME = os.environ.get('S3_BUCKET_NAME')
+# Konfigurasi Database
+db_config = {
+    'host': os.getenv('RDS_HOST'),
+    'user': os.getenv('RDS_USER'),
+    'password': os.getenv('RDS_PASSWORD'),
+    'db': 'pengaduan_db',
+    'charset': 'utf8mb4',
+    'cursorclass': pymysql.cursors.DictCursor
+}
 
-# Fungsi Koneksi ke RDS MySQL
-def get_db_connection():
-    # Pertama connect ke RDS tanpa nama database (karena belum dibuat)
-    conn = pymysql.connect(
-        host=os.environ.get('RDS_HOST'),
-        user=os.environ.get('RDS_USER'),
-        password=os.environ.get('RDS_PASSWORD'),
-        cursorclass=pymysql.cursors.DictCursor
-    )
-    # Buat database dan tabel secara otomatis jika belum ada!
-    with conn.cursor() as cursor:
-        cursor.execute("CREATE DATABASE IF NOT EXISTS db_pengaduan_desa;")
-        cursor.execute("USE db_pengaduan_desa;")
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS laporan (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                nama VARCHAR(255) NOT NULL,
-                keluhan TEXT NOT NULL,
-                foto_url VARCHAR(255) NOT NULL,
-                status VARCHAR(50) DEFAULT 'Menunggu'
-            )
-        """)
-    conn.commit()
-    return conn
+# Konfigurasi S3
+s3 = boto3.client(
+    's3',
+    aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
+    aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY'),
+    region_name='ap-southeast-2'
+)
+BUCKET_NAME = 'pengaduan-desa-azka-2026'
+
+def init_db():
+    """Fungsi otomatis untuk membuat database dan tabel jika belum ada"""
+    try:
+        # Koneksi awal tanpa nama database untuk membuat database-nya dulu
+        conn = pymysql.connect(
+            host=db_config['host'],
+            user=db_config['user'],
+            password=db_config['password']
+        )
+        cursor = conn.cursor()
+        cursor.execute(f"CREATE DATABASE IF NOT EXISTS {db_config['db']}")
+        cursor.execute(f"USE {db_config['db']}")
+        
+        # Buat tabel laporan
+        create_table_query = """
+        CREATE TABLE IF NOT EXISTS laporan (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            nama_pelapor VARCHAR(100),
+            keluhan TEXT,
+            foto_url VARCHAR(255),
+            status VARCHAR(20) DEFAULT 'Pending'
+        );
+        """
+        cursor.execute(create_table_query)
+        conn.commit()
+        print("✅ Database & Tabel berhasil diinisialisasi!")
+    except Exception as e:
+        print(f"❌ Gagal inisialisasi DB: {e}")
+    finally:
+        conn.close()
 
 @app.route('/')
 def index():
     return render_template('index.html')
 
-@app.route('/pengaduan', methods=['GET', 'POST'])
-def form_pengaduan():
-    if request.method == 'POST':
-        nama = request.form.get('nama')
-        keluhan = request.form.get('keluhan')
-        foto = request.files.get('foto')
-        
-        foto_url = "Tidak ada foto"
-        
-        # 1. LOGIKA UPLOAD KE S3
-        if foto and foto.filename != '':
-            # Bikin nama file unik pakai UUID biar ga bentrok
-            nama_file_unik = f"{uuid.uuid4().hex}_{foto.filename}"
-            try:
-                s3_client.upload_fileobj(
-                    foto,
-                    BUCKET_NAME,
-                    nama_file_unik,
-                    ExtraArgs={'ContentType': foto.content_type}
-                )
-                # Sementara kita pakai URL langsung S3. 
-                # (Nanti kalau CloudFront udah di-ACC, kita tinggal ganti sebaris ini!)
-                foto_url = f"https://{BUCKET_NAME}.s3.{os.environ.get('AWS_REGION')}.amazonaws.com/{nama_file_unik}"
-            except Exception as e:
-                print("Gagal upload S3:", e)
-                
-        # 2. LOGIKA INSERT KE RDS
-        try:
-            conn = get_db_connection()
-            with conn.cursor() as cursor:
-                cursor.execute(
-                    "INSERT INTO laporan (nama, keluhan, foto_url) VALUES (%s, %s, %s)",
-                    (nama, keluhan, foto_url)
-                )
-            conn.commit()
-            conn.close()
-        except Exception as e:
-            print("Gagal simpan ke RDS:", e)
+@app.route('/pengaduan', methods=['POST'])
+def pengaduan():
+    nama = request.form['nama']
+    keluhan = request.form['keluhan']
+    file = request.files['foto']
 
-        return redirect(url_for('dashboard'))
-    return render_template('form.html')
+    if file:
+        # Upload ke S3
+        file_path = file.filename
+        s3.upload_fileobj(file, BUCKET_NAME, file_path)
+        foto_url = f"https://{BUCKET_NAME}.s3.ap-southeast-2.amazonaws.com/{file_path}"
+
+        # Simpan ke RDS
+        conn = pymysql.connect(**db_config)
+        try:
+            with conn.cursor() as cursor:
+                sql = "INSERT INTO laporan (nama_pelapor, keluhan, foto_url) VALUES (%s, %s, %s)"
+                cursor.execute(sql, (nama, keluhan, foto_url))
+            conn.commit()
+        finally:
+            conn.close()
+
+    return redirect(url_for('dashboard'))
 
 @app.route('/dashboard')
 def dashboard():
-    laporan_masuk = []
+    conn = pymysql.connect(**db_config)
     try:
-        # Mengambil data asli dari RDS
-        conn = get_db_connection()
         with conn.cursor() as cursor:
-            cursor.execute("USE db_pengaduan_desa;")
             cursor.execute("SELECT * FROM laporan ORDER BY id DESC")
-            laporan_masuk = cursor.fetchall()
+            data_laporan = cursor.fetchall()
+    finally:
         conn.close()
-    except Exception as e:
-        print("Gagal tarik data RDS:", e)
-        
-    return render_template('dashboard.html', laporan=laporan_masuk)
+    return render_template('dashboard.html', laporan=data_laporan)
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    init_db() # Jalankan fungsi buat tabel tiap aplikasi start
+    app.run(host='0.0.0.0', port=5000)
