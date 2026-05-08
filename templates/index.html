@@ -5,6 +5,25 @@
     <title>Portal Desa | Beranda</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        /* Tambahan sedikit CSS biar formnya rapi */
+        .form-box {
+            background: #fff;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            max-width: 500px;
+            margin: 20px auto;
+            text-align: left;
+        }
+        .form-box input, .form-box textarea {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+    </style>
 </head>
 <body>
     <nav class="navbar">
@@ -19,8 +38,25 @@
         <div class="hero">
             <h1><i class="fas fa-bullhorn"></i> Layanan Pengaduan Warga</h1>
             <p>Mari bersama membangun desa! Sampaikan keluhan, aspirasi, dan laporan infrastruktur di lingkungan Anda dengan cepat dan transparan.</p>
-            <a href="/pengaduan" class="btn"><i class="fas fa-paper-plane"></i> Buat Laporan Sekarang</a>
-            <a href="/dashboard" class="btn btn-secondary"><i class="fas fa-search"></i> Cek Status Laporan</a>
+            
+            <div class="form-box">
+                <form action="/pengaduan" method="POST" enctype="multipart/form-data">
+                    <label><b>Nama Pelapor:</b></label>
+                    <input type="text" name="nama" placeholder="Masukkan nama Anda" required>
+
+                    <label><b>Keluhan/Laporan:</b></label>
+                    <textarea name="keluhan" rows="4" placeholder="Jelaskan laporan Anda..." required></textarea>
+
+                    <label><b>Upload Foto Bukti:</b></label>
+                    <input type="file" name="foto" accept="image/*" required>
+
+                    <button type="submit" class="btn" style="width: 100%; margin-top: 15px;">
+                        <i class="fas fa-paper-plane"></i> Kirim Laporan
+                    </button>
+                </form>
+            </div>
+
+            <a href="/dashboard" class="btn btn-secondary" style="margin-top: 20px;"><i class="fas fa-search"></i> Cek Status Laporan di Dashboard</a>
         </div>
     </div>
 </body>
