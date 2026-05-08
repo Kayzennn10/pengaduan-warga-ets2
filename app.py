@@ -8,12 +8,12 @@ load_dotenv()
 
 app = Flask(__name__)
 
-# Konfigurasi Database
+# Konfigurasi Database (Sudah pakai mysql bawaan)
 db_config = {
     'host': os.getenv('RDS_HOST'),
     'user': os.getenv('RDS_USER'),
     'password': os.getenv('RDS_PASSWORD'),
-    'db': 'mysql',
+    'db': 'mysql', 
     'charset': 'utf8mb4',
     'cursorclass': pymysql.cursors.DictCursor
 }
@@ -28,12 +28,10 @@ s3 = boto3.client(
 BUCKET_NAME = 'pengaduan-desa-azka-2026'
 
 def init_db():
+    conn = None # <--- SOLUSI: Deklarasi conn di awal agar tidak error
     try:
-        # Koneksi langsung menggunakan database default dari .env
         conn = pymysql.connect(**db_config)
         cursor = conn.cursor()
-        
-        # Langsung buat tabelnya saja
         create_table_query = """
         CREATE TABLE IF NOT EXISTS laporan (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -49,7 +47,8 @@ def init_db():
     except Exception as e:
         print(f"❌ Gagal buat tabel: {e}")
     finally:
-        conn.close()
+        if conn: # <--- SOLUSI: Cek dulu apakah conn ada sebelum ditutup
+            conn.close()
 
 @app.route('/')
 def index():
@@ -62,34 +61,41 @@ def pengaduan():
     file = request.files['foto']
 
     if file:
-        # Upload ke S3
         file_path = file.filename
         s3.upload_fileobj(file, BUCKET_NAME, file_path)
         foto_url = f"https://{BUCKET_NAME}.s3.ap-southeast-2.amazonaws.com/{file_path}"
 
-        # Simpan ke RDS
-        conn = pymysql.connect(**db_config)
+        conn = None
         try:
+            conn = pymysql.connect(**db_config)
             with conn.cursor() as cursor:
                 sql = "INSERT INTO laporan (nama_pelapor, keluhan, foto_url) VALUES (%s, %s, %s)"
                 cursor.execute(sql, (nama, keluhan, foto_url))
             conn.commit()
+        except Exception as e:
+            print(f"Error DB: {e}")
         finally:
-            conn.close()
+            if conn:
+                conn.close()
 
     return redirect(url_for('dashboard'))
 
 @app.route('/dashboard')
 def dashboard():
-    conn = pymysql.connect(**db_config)
+    data_laporan = []
+    conn = None
     try:
+        conn = pymysql.connect(**db_config)
         with conn.cursor() as cursor:
             cursor.execute("SELECT * FROM laporan ORDER BY id DESC")
             data_laporan = cursor.fetchall()
+    except Exception as e:
+        print(f"Error DB: {e}")
     finally:
-        conn.close()
+        if conn:
+            conn.close()
     return render_template('dashboard.html', laporan=data_laporan)
 
 if __name__ == '__main__':
-    init_db() # Jalankan fungsi buat tabel tiap aplikasi start
+    init_db()
     app.run(host='0.0.0.0', port=5000)
